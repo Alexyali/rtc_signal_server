@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTC 信令服务器测试客户端</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background: #ccc;
+        }
+
+        .status-dot.connected {
+            background: #4caf50;
+            box-shadow: 0 0 10px #4caf50;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:disabled {
+    opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-join {
+            background: #4caf50;
+            color: white;
+        }
+
+        .btn-join:hover:not(:disabled) {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-leave {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-leave:hover:not(:disabled) {
+            background: #da190b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .info-box h3 {
+            color: #1976d2;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .info-box p {
+            color: #555;
+            font-size: 13px;
+        }
+
+        .log-container {
+            background: #f9f9f9;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-container h3 {
+            color: #333;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .log-entry {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .log-info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .log-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .log-warning {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .log-error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .timestamp {
+            color: #999;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 RTC 信令服务器测试客户端</h1>
+
+        <div class="status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">未连接</span>
+        </div>
+
+        <div class="form-group">
+            <label for="userId">用户 ID</label>
+            <input type="text" id="userId" placeholder="例如: user123" value="">
+        </div>
+
+        <div class="form-group">
+            <label for="roomId">房间 ID</label>
+            <input type="text" id="roomId" placeholder="例如: room456" value="">
+        </div>
+
+        <div class="button-group">
+            <button class="btn-join" id="joinBtn" disabled>加入房间</button>
+            <button class="btn-leave" id="leaveBtn" disabled>离开房间</button>
+        </div>
+
+        <div class="info-box">
+            <h3>房间用户</h3>
+            <p id="roomUsers">暂无</p>
+        </div>
+
+        <div class="log-container">
+            <h3>消息日志</h3>
+            <div id="logMessages"></div>
+        </div>
+    </div>
+
+    <script>
+        // 生成随机用户ID
+        const randomUserId = 'user' + Math.floor(Math.random() * 10000);
+        document.getElementById('userId').value = randomUserId;
+        document.getElementById('roomId').value = 'room1';
+
+        // 连接到服务器
+        const socket = io('http://localhost:5000');
+
+        let currentRoom = null;
+        let currentUserId = null;
+        let roomUsers = [];
+
+        // DOM 元素
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const joinBtn = document.getElementById('joinBtn');
+        const leaveBtn = document.getElementById('leaveBtn');
+        const userIdInput = document.getElementById('userId');
+        const roomIdInput = document.getElementById('roomId');
+        const roomUsersEl = document.getElementById('roomUsers');
+        const logMessages = document.getElementById('logMessages');
+
+        // 连接成功
+        socket.on('connect', () => {
+            addLog('已连接到服务器', 'success');
+            statusDot.classList.add('connected');
+            statusText.textContent = '已连接';
+            joinBtn.disabled = false;
+        });
+
+        // 连接断开
+        socket.on('disconnect', () => {
+            addLog('与服务器断开连接', 'error');
+            statusDot.classList.remove('connected');
+            statusText.textContent = '未连接';
+            joinBtn.disabled = true;
+            leaveBtn.disabled = true;
+        });
+
+        // 加入成功
+        socket.on('joined', (data) => {
+            currentRoom = data.roomId;
+            currentUserId = data.userId;
+            roomUsers = data.users;
+
+            addLog(`✅ 成功加入房间 ${data.roomId}`, 'success');
+            addLog(`房间内用户: ${data.users.join(', ')}`, 'info');
+
+            updateRoomUsers();
+            joinBtn.disabled = true;
+            leaveBtn.disabled = false;
+            userIdInput.disabled = true;
+            roomIdInput.disabled = true;
+        });
+
+        // 其他用户加入
+        socket.on('user-joined', (data) => {
+            if (!roomUsers.includes(data.userId)) {
+                roomUsers.push(data.userId);
+            }
+            addLog(`👤 ${data.userId} 加入了房间`, 'info');
+            updateRoomUsers();
+        });
+
+        // 离开成功
+        socket.on('leaved', (data) => {
+            addLog(`✅ 已离开房间 ${data.roomId}`, 'success');
+            currentRoom = null;
+            currentUserId = null;
+            roomUsers = [];
+
+            updateRoomUsers();
+            joinBtn.disabled = false;
+            leaveBtn.disabled = true;
+            userIdInput.disabled = false;
+            roomIdInput.disabled = false;
+        });
+
+        // 其他用户离开
+        socket.on('user-left', (data) => {
+            roomUsers = roomUsers.filter(u => u !== data.userId);
+            addLog(`👋 ${data.userId} 离开了房间`, 'warning');
+            updateRoomUsers();
+        });
+
+        // 错误处理
+        socket.on('error', (data) => {
+            addLog(`❌ 错误: ${data.message}`, 'error');
+        });
+
+        // 加入房间按钮
+        joinBtn.addEventListener('click', () => {
+            const userId = userIdInput.value.trim();
+            const roomId = roomIdInput.value.trim();
+
+            if (!userId || !roomId) {
+                addLog('请输入用户ID和房间ID', 'error');
+                return;
+            }
+
+            socket.emit('join', { userId, roomId });
+            addLog(`正在加入房间 ${roomId}...`, 'info');
+        });
+
+        // 离开房间按钮
+        leaveBtn.addEventListener('click', () => {
+            if (currentUserId && currentRoom) {
+                socket.emit('leave', { userId: currentUserId, roomId: currentRoom });
+                addLog(`正在离开房间 ${currentRoom}...`, 'info');
+            }
+        });
+
+        // 更新房间用户显示
+        function updateRoomUsers() {
+            if (roomUsers.length > 0) {
+                roomUsersEl.textContent = roomUsers.join(', ');
+            } else {
+                roomUsersEl.textContent = '暂无';
+            }
+        }
+
+        // 添加日志
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+
+            const timestamp = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+
+            logMessages.appendChild(entry);
+            logMessages.scrollTop = logMessages.scrollHeight;
+        }
+    </script>
+</body>
+</html>
